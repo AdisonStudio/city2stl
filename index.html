@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City2STL 預覽實驗</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #20242b; color: #e8eaed; font: 14px/1.5 system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #panel { position: fixed; left: 12px; top: 12px; right: 12px; max-width: 340px; padding: 10px 12px;
+           background: rgba(20, 22, 27, .82); border-radius: 8px; z-index: 1; }
+  #panel select { width: 100%; font: inherit; padding: 4px; margin-bottom: 6px; }
+  #panel table { border-collapse: collapse; width: 100%; }
+  #panel td { padding: 1px 0; }
+  #panel td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  #status { color: #ffd54f; }
+  #credit { margin-top: 6px; font-size: 11px; color: #9aa0a6; }
+  #notice { display: none; margin: 8px 0 4px; padding: 8px 10px; border-left: 3px solid #ff8a80;
+            background: rgba(255, 138, 128, .12); }
+  .buttons { display: flex; gap: 6px; margin-top: 6px; }
+  .buttons button { flex: 1; font: inherit; padding: 4px; }
+  .buttons button[aria-pressed="true"] { font-weight: 600; outline: 2px solid #ffd54f; }
+  #views { display: none; }
+  #legend { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; }
+  #legend li { display: flex; align-items: center; gap: 6px; }
+  #legend i { flex: none; width: 12px; height: 12px; border: 1px solid #9aa0a6; border-radius: 2px; }
+  #still { display: none; flex: 1 1 0; min-width: 0; min-height: 0; background: center / contain no-repeat; }
+  /* 圖片後備：面板不蓋在圖片上。窄螢幕面板在上、圖片在下；寬螢幕面板在左、圖片在右。 */
+  body.still { display: flex; flex-direction: column; height: 100%; }
+  body.still #panel { position: static; order: -1; margin: 12px; align-self: flex-start; }
+  body.still .live { display: none; }
+  body.still #notice { display: block; }
+  body.still #views { display: flex; }
+  body.still #still { display: block; }
+  @media (min-width: 800px) { body.still { flex-direction: row; } }
+  body.shot #panel { display: none; }
+</style>
+</head>
+<body>
+<div id="still" role="img" aria-label="模型的預先算好的圖片"></div>
+<div id="panel">
+  <select id="picker" aria-label="模型"></select>
+  <table>
+    <tr><td>狀態</td><td id="status">讀取清單…</td></tr>
+    <tr><td>比例／尺寸</td><td id="spec">–</td></tr>
+    <tr><td>三角形</td><td id="triangles">–</td></tr>
+    <tr class="live"><td>檔案大小</td><td id="megabytes">–</td></tr>
+    <tr class="live"><td>下載＋解析</td><td id="load">–</td></tr>
+    <tr class="live"><td>畫面更新率</td><td id="fps">–</td></tr>
+  </table>
+  <div id="notice">
+    <strong>你的瀏覽器不支援 WebGL，無法顯示可旋轉的 3D 模型。</strong><br>
+    下面是預先算好的圖片，可以切換角度。要看 3D，請開啟瀏覽器的硬體（圖形）加速，或換一個瀏覽器、換一台裝置。
+  </div>
+  <div id="modes" class="buttons" aria-label="配色"></div>
+  <div id="views" class="buttons" aria-label="視角"></div>
+  <ul id="legend" aria-label="顏色說明"></ul>
+  <div id="credit">© OpenStreetMap contributors；建築：臺北市政府都市發展局 2025 年 LOD1；地形：Copernicus GLO-30</div>
+</div>
+<script>
+// 這段不用模組、不用 three.js：WebGL 檢查、模型清單與靜態圖片後備都在這裡，舊瀏覽器也能跑。
+var demo = (function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var params = new URLSearchParams(location.search);
+  // 視角：相機位置＝模型中心＋對角線長 ×（x, y, z）；make_stills.py 用同一組名稱產生圖片。
+  var VIEWS = { front: { label: "正面俯視", at: [0, .75, .95] }, top: { label: "正上方", at: [0, 1.35, .001] },
+                back: { label: "背面俯視", at: [0, .75, -.95] } };
+  // 配色與交付版本同名：多色 color/、基本色 basic/（只留道路、水域等，其餘改底色，D048）、單色 mono/（全部底色）。
+  var MODES = { color: "多色", basic: "基本色", mono: "單色" };
+
+  // 一排單選按鈕：labels 是 {名稱: 文字}，current 是目前選中的名稱，按下時呼叫 pick(名稱)。
+  function buttons(id, labels, current, pick) {
+    $(id).innerHTML = "";
+    Object.keys(labels).forEach(function (name) {
+      var button = document.createElement("button");
+      button.textContent = labels[name];
+      button.setAttribute("aria-pressed", String(name === current));
+      button.onclick = function () { pick(name); };
+      $(id).appendChild(button);
+    });
+  }
+
+  // 配色按鈕；切換後呼叫 changed() 重畫（3D 換材質顏色，圖片後備換圖）。
+  function modeButtons(changed) {
+    buttons("modes", MODES, api.mode, function (name) { api.mode = name; modeButtons(changed); changed(); });
+  }
+
+  function fail(message) {
+    $("status").textContent = message;
+    $("status").style.color = "#ff8a80";
+  }
+
+  // 實際建立一次繪圖環境才算數：有 WebGLRenderingContext 不代表顯示卡或設定允許使用。
+  function webglAvailable() {
+    if (params.has("still")) return false;  // ?still=1 強制走圖片後備（測試用）
+    try {
+      var canvas = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (canvas.getContext("webgl2") || canvas.getContext("webgl")));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function describe(info) {
+    $("spec").textContent = info.scale + "，" + info.size_mm.join("×") + " mm";
+    $("triangles").textContent = info.triangles.toLocaleString();
+    $("megabytes").textContent = info.megabytes + " MB";
+    legend(info);
+  }
+
+  // 顏色說明：只列目前配色看得到的顏色（多色＝全部；基本色＝底色與保留色；單色＝底色）。
+  function legend(info) {
+    $("legend").innerHTML = "";
+    (info.legend || []).forEach(function (entry) {
+      var shown = api.mode === "color" || entry.color === info.base ||
+                  (api.mode === "basic" && info.keep.indexOf(entry.color) >= 0);
+      if (!shown) return;
+      var item = document.createElement("li"), swatch = document.createElement("i");
+      swatch.style.background = entry.color;
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(entry.label));
+      $("legend").appendChild(item);
+    });
+  }
+
+  // 圖片後備：明確告知不支援 WebGL，改顯示預先算好的圖片。
+  function showStills(models) {
+    document.body.className = "still";
+    var view = "front";
+    function draw() {
+      var info = models[$("picker").value];
+      describe(info);
+      var stills = (info.stills || {})[api.mode] || {};
+      var labels = {};
+      Object.keys(VIEWS).forEach(function (name) { if (stills[name]) labels[name] = VIEWS[name].label; });
+      if (!stills[view]) view = Object.keys(labels)[0];
+      buttons("views", labels, view, function (name) { view = name; draw(); });
+      if (!view) {
+        view = "front";
+        $("still").style.backgroundImage = "";
+        return fail("不支援 WebGL，而且這個模型沒有預先算好的圖片（執行 make_stills.py 產生）");
+      }
+      var probe = new Image();  // 背景圖載入失敗不會有事件，另外用 Image 偵測
+      probe.onerror = function () { fail("圖片載入失敗：" + stills[view]); };
+      probe.src = stills[view];
+      $("still").style.backgroundImage = 'url("' + stills[view] + '")';
+      fail("不支援 WebGL：顯示圖片");
+    }
+    $("picker").onchange = draw;
+    modeButtons(draw);
+    draw();
+  }
+
+  var ready = fetch("models.json").then(function (response) {
+    if (!response.ok) throw new Error("找不到 models.json：先執行 make_preview.py");
+    return response.json();
+  }).then(function (models) {
+    Object.keys(models).forEach(function (name) { $("picker").add(new Option(name, name)); });
+    if (params.get("model") in models) $("picker").value = params.get("model");
+    if (!api.webgl) showStills(models);
+    return models;
+  });
+  ready.catch(function (error) { fail(error.message || String(error)); });
+
+  window.addEventListener("error", function (event) {
+    if (document.body.className === "still") return;  // 圖片後備已接手，不用再報 3D 的錯
+    var source = event.target && event.target.src;
+    fail(source ? "載入失敗：" + source : event.message ? "錯誤：" + event.message
+         : "3D 檢視載入失敗：vendor/three/ 的檔案沒有載入，或瀏覽器太舊");
+  }, true);
+
+  var api = { $: $, params: params, VIEWS: VIEWS, fail: fail, describe: describe, showStills: showStills,
+              modeButtons: modeButtons, mode: params.get("mode") in MODES ? params.get("mode") : "color",
+              webgl: webglAvailable(), ready: ready, shot: params.get("shot") };
+  return api;
+})();
+</script>
+<script type="module">
+// 3D 檢視：只在 WebGL 可用時啟動。three.js r160 放在 vendor/three/（MIT），不依賴 CDN，也不需要 import map。
+import * as THREE from "./vendor/three/three.module.js";
+import { OrbitControls } from "./vendor/three/OrbitControls.js";
+import { GLTFLoader } from "./vendor/three/GLTFLoader.js";
+
+const { $, fail, describe, VIEWS } = demo;
+const models = await demo.ready;
+if (demo.webgl) {
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: Boolean(demo.shot) });
+  } catch (error) {  // 檢查通過但實際建立失敗（顯示卡被列入黑名單等）：一樣走圖片後備
+    demo.showStills(models);
+    throw error;
+  }
+  if (demo.shot) document.body.className = "shot";  // 產生靜態圖片用：隱藏面板、固定視角
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x20242b);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 1.1));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  sun.position.set(-1, 1.4, 1);  // 左上前方打光，建築的牆面才有明暗
+  scene.add(sun);
+  const camera = new THREE.PerspectiveCamera(35, 1, 1, 10000);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI / 2;  // 不讓視角鑽到底面以下
+
+  const resize = () => {
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  };
+  window.addEventListener("resize", resize);
+  resize();
+
+  let current = null;
+  // GLB 的材質顏色是把色碼直接當線性值寫入的（make_preview.py），底色也用同樣的換算才會和原本的同色一致。
+  const flat = (hex) => new THREE.Color().setRGB(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
+  // 依配色改材質顏色（材質名稱＝原色碼）：多色＝原色；基本色＝保留色以外改底色；單色＝全部底色。
+  const paint = () => {
+    const info = models[$("picker").value];
+    describe(info);  // 顏色說明跟著配色更新
+    if (!current || !info.base) return;
+    current.traverse((node) => {
+      if (!node.isMesh) return;
+      const material = node.material;
+      material.userData.original ??= material.color.clone();
+      const kept = demo.mode === "color" || (demo.mode === "basic" && info.keep.includes(material.name.toUpperCase()));
+      material.color.copy(kept ? material.userData.original : flat(info.base));
+    });
+  };
+  demo.modeButtons(paint);
+  const show = async (info) => {
+    $("status").textContent = "載入中…";
+    for (const id of ["load", "fps"]) $(id).textContent = "–";
+    describe(info);
+    const started = performance.now();
+    let gltf;
+    try {
+      gltf = await new GLTFLoader().loadAsync(info.file, (progress) => {
+        $("status").textContent = `下載中 ${(progress.loaded / 1e6).toFixed(1)}／${info.megabytes} MB`;
+      });
+    } catch (error) {
+      fail(`模型載入失敗（${info.file}）：${error.message || error}`);
+      throw error;
+    }
+    $("status").style.color = "";
+    if (current) scene.remove(current);
+    current = gltf.scene;
+    current.traverse((node) => { if (node.isMesh) node.material.flatShading = true; });  // 建築是平面，不要平滑法線
+    scene.add(current);
+    paint();
+    const box = new THREE.Box3().setFromObject(current);
+    const center = box.getCenter(new THREE.Vector3());
+    const reach = box.getSize(new THREE.Vector3()).length();
+    const [x, y, z] = (VIEWS[demo.shot] || VIEWS.front).at;
+    controls.target.copy(center);
+    camera.position.set(center.x + reach * x, center.y + reach * y, center.z + reach * z);
+    camera.near = reach / 1000;
+    camera.far = reach * 10;
+    camera.updateProjectionMatrix();
+    $("load").textContent = `${((performance.now() - started) / 1000).toFixed(1)} 秒`;
+    $("status").textContent = "完成";
+    document.title = "ready";  // make_stills.py 以此判斷畫面已可擷取
+  };
+
+  let frames = 0, since = performance.now();
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+    frames += 1;
+    const now = performance.now();
+    if (now - since >= 1000) {
+      $("fps").textContent = `${Math.round(frames * 1000 / (now - since))} fps`;
+      frames = 0; since = now;
+    }
+  });
+
+  $("picker").addEventListener("change", () => show(models[$("picker").value]));
+  show(models[$("picker").value]);
+}
+</script>
+</body>
+</html>

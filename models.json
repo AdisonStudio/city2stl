@@ -1,0 +1,66 @@
+{
+  "Neike_2000m_1x1": {
+    "file": "Neike_2000m_1x1.glb",
+    "triangles": 986790,
+    "base": "#FFFFFF",
+    "keep": [
+      "#D9D9D9",
+      "#81D4FA"
+    ],
+    "legend": [
+      {
+        "color": "#FFFFFF",
+        "label": "底色（地面、一般建築）"
+      },
+      {
+        "color": "#81D4FA",
+        "label": "水域"
+      },
+      {
+        "color": "#D9D9D9",
+        "label": "道路"
+      },
+      {
+        "color": "#FB8C00",
+        "label": "便利商店、商場"
+      },
+      {
+        "color": "#E53935",
+        "label": "診所、消防局、醫院、警察局"
+      },
+      {
+        "color": "#43A047",
+        "label": "活動中心、郵局、政府機關"
+      },
+      {
+        "color": "#FFD54F",
+        "label": "圖書館、學校"
+      }
+    ],
+    "megabytes": 18.3,
+    "size_mm": [
+      200.0,
+      200.0,
+      54.4
+    ],
+    "scale": "1:10000",
+    "run_id": "20261116T231942",
+    "stills": {
+      "color": {
+        "front": "stills/Neike_2000m_1x1_color_front.png",
+        "top": "stills/Neike_2000m_1x1_color_top.png",
+        "back": "stills/Neike_2000m_1x1_color_back.png"
+      },
+      "basic": {
+        "front": "stills/Neike_2000m_1x1_basic_front.png",
+        "top": "stills/Neike_2000m_1x1_basic_top.png",
+        "back": "stills/Neike_2000m_1x1_basic_back.png"
+      },
+      "mono": {
+        "front": "stills/Neike_2000m_1x1_mono_front.png",
+        "top": "stills/Neike_2000m_1x1_mono_top.png",
+        "back": "stills/Neike_2000m_1x1_mono_back.png"
+      }
+    }
+  }
+}
