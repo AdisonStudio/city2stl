@@ -61,6 +61,74 @@
         "top": "stills/Neike_2000m_1x1_mono_top.png",
         "back": "stills/Neike_2000m_1x1_mono_back.png"
       }
-    }
+    },
+    "title": "內科 2×2 km｜建物：臺北市 LOD1",
+    "credit": "© OpenStreetMap contributors（ODbL，openstreetmap.org/copyright）；建築：臺北市政府都市發展局 2025 年 LOD1；行政界：內政部國土測繪中心 1140318；地形：produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved"
+  },
+  "Neike_2000m_1x1_osm": {
+    "file": "Neike_2000m_1x1_osm.glb",
+    "triangles": 531220,
+    "base": "#FFFFFF",
+    "keep": [
+      "#D9D9D9",
+      "#81D4FA"
+    ],
+    "legend": [
+      {
+        "color": "#FFFFFF",
+        "label": "底色（地面、一般建築）"
+      },
+      {
+        "color": "#81D4FA",
+        "label": "水域"
+      },
+      {
+        "color": "#D9D9D9",
+        "label": "道路"
+      },
+      {
+        "color": "#FFD54F",
+        "label": "幼兒園、圖書館、學校"
+      },
+      {
+        "color": "#E53935",
+        "label": "診所、消防局、醫院、警察局"
+      },
+      {
+        "color": "#FB8C00",
+        "label": "便利商店、商場"
+      },
+      {
+        "color": "#43A047",
+        "label": "活動中心、郵局、政府機關"
+      }
+    ],
+    "megabytes": 10.0,
+    "size_mm": [
+      200.0,
+      200.0,
+      54.0
+    ],
+    "scale": "1:10000",
+    "run_id": "20261117T173759",
+    "stills": {
+      "color": {
+        "front": "stills/Neike_2000m_1x1_osm_color_front.png",
+        "top": "stills/Neike_2000m_1x1_osm_color_top.png",
+        "back": "stills/Neike_2000m_1x1_osm_color_back.png"
+      },
+      "basic": {
+        "front": "stills/Neike_2000m_1x1_osm_basic_front.png",
+        "top": "stills/Neike_2000m_1x1_osm_basic_top.png",
+        "back": "stills/Neike_2000m_1x1_osm_basic_back.png"
+      },
+      "mono": {
+        "front": "stills/Neike_2000m_1x1_osm_mono_front.png",
+        "top": "stills/Neike_2000m_1x1_osm_mono_top.png",
+        "back": "stills/Neike_2000m_1x1_osm_mono_back.png"
+      }
+    },
+    "title": "內科 2×2 km｜建物：OSM（52% 用預設高度 12 m）",
+    "credit": "© OpenStreetMap contributors（ODbL，openstreetmap.org/copyright）；地形：produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved"
   }
 }

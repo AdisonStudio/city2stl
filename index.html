@@ -105,6 +105,7 @@ var demo = (function () {
     $("spec").textContent = info.scale + "，" + info.size_mm.join("×") + " mm";
     $("triangles").textContent = info.triangles.toLocaleString();
     $("megabytes").textContent = info.megabytes + " MB";
+    if (info.credit) $("credit").textContent = info.credit;  // 依模型實際用到的資料來源
     legend(info);
   }
 
@@ -155,7 +156,8 @@ var demo = (function () {
     if (!response.ok) throw new Error("找不到 models.json：先執行 make_preview.py");
     return response.json();
   }).then(function (models) {
-    Object.keys(models).forEach(function (name) { $("picker").add(new Option(name, name)); });
+    // 清單顯示 title（選填，例如註明建物來源），沒有就顯示模型名稱。
+    Object.keys(models).forEach(function (name) { $("picker").add(new Option(models[name].title || name, name)); });
     if (params.get("model") in models) $("picker").value = params.get("model");
     if (!api.webgl) showStills(models);
     return models;
